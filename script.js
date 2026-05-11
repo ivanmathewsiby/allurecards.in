@@ -1,314 +1,355 @@
+```javascript
 document.addEventListener("DOMContentLoaded", () => {
 
-    // 1. Preloader
-    const preloader = document.getElementById('preloader');
-    window.addEventListener('load', () => {
-        setTimeout(() => {
-            preloader.style.opacity = '0';
-            preloader.style.visibility = 'hidden';
-        }, 800);
+// 1. Preloader
+const preloader = document.getElementById('preloader');
+window.addEventListener('load', () => {
+    setTimeout(() => {
+        preloader.style.opacity = '0';
+        preloader.style.visibility = 'hidden';
+    }, 800);
+});
+
+// 2. Constants
+const whatsappNumber = "919526577999";
+const DEFAULT_DESCRIPTION = "Experience the timeless elegance of this design. Crafted on premium materials with exquisite detailing.";
+const ITEMS_PER_PAGE = 12;
+
+// DOM elements
+const productContainer = document.getElementById('product-container');
+const showMoreBtn = document.getElementById('show-more-btn');
+const filterContainer = document.getElementById('filter-container');
+const categoryGrid = document.getElementById('category-grid');
+
+// Modal elements
+const modal = document.getElementById('quick-view-modal');
+const closeModalBtn = document.getElementById('close-modal');
+const modalImg = document.getElementById('modal-main-img');
+const thumbnailContainer = document.getElementById('modal-thumbnails');
+const modalTitle = document.getElementById('modal-title');
+const modalUnitPrice = document.getElementById('modal-unit-price');
+const modalCategoryLabel = document.getElementById('modal-category-label');
+const modalDescText = document.getElementById('modal-desc-text');
+const qtyInput = document.getElementById('modal-qty');
+const calcBaseTotal = document.getElementById('calc-base-total');
+const calcDiscountPct = document.getElementById('calc-discount-pct');
+const calcDiscountAmt = document.getElementById('calc-discount-amt');
+const calcFinalTotal = document.getElementById('calc-final-total');
+const whatsappBtn = document.getElementById('modal-whatsapp-btn');
+
+// State
+let allProducts = [];          // Full dataset from JSON
+let filteredProducts = [];    // Products matching current filter (sorted featured first)
+let visibleCount = 0;
+let currentFilter = 'All';
+
+// Mock Data for demonstration since cards.json is not present
+const mockData = [
+    { id: "VELLUM 106", category: "Floral", price: 48, images: ["allure_page-0003.jpg"], featured: true },
+    { id: "DIGITAL 140", category: "Minimal", price: 55, images: ["allure_page-0003.jpg"], featured: false },
+    { id: "VELLUM 105", category: "Floral", price: 50, images: ["allure_page-0003.jpg"], featured: false },
+    { id: "BLUSH GARDEN", category: "Heritage", price: 26.50, images: ["allure_page-0003.jpg"], featured: true },
+];
+
+// ---------------------------------------------------------------------
+// 3. Fetch data and initialize everything
+// ---------------------------------------------------------------------
+fetch('./data/cards.json')
+    .then(res => res.json())
+    .then(data => {
+        initApp(data);
+    })
+    .catch(err => {
+        console.warn('Failed to load cards.json, falling back to mock data for layout purposes.', err);
+        initApp(mockData);
     });
 
-    // 2. Constants
-    const whatsappNumber = "919526577999";
-    const DEFAULT_DESCRIPTION = "Experience the timeless elegance of this design. Crafted on premium materials with exquisite detailing.";
-    const ITEMS_PER_PAGE = 12;
+function initApp(data) {
+    allProducts = data.map(p => ({
+        ...p,
+        images: (p.images && p.images.length > 0) ? p.images : ['assets/cards/placeholder.jpg'],
+        featured: p.featured || false,
+        description: p.description || DEFAULT_DESCRIPTION
+    }));
 
-    // DOM elements
-    const productContainer = document.getElementById('product-container');
-    const showMoreBtn = document.getElementById('show-more-btn');
-    const filterContainer = document.getElementById('filter-container');
-    const categoryGrid = document.getElementById('category-grid');
+    buildCategoryMenu();
+    buildFilterButtons();
+    applyFilter('All');
+    updateShowMoreButton();
+}
 
-    // Modal elements
-    const modal = document.getElementById('quick-view-modal');
-    const closeModalBtn = document.getElementById('close-modal');
-    const modalImg = document.getElementById('modal-main-img');
-    const thumbnailContainer = document.getElementById('modal-thumbnails');
-    const modalTitle = document.getElementById('modal-title');
-    const modalUnitPrice = document.getElementById('modal-unit-price');
-    const modalCategoryLabel = document.getElementById('modal-category-label');
-    const modalDescText = document.getElementById('modal-desc-text');
-    const qtyInput = document.getElementById('modal-qty');
-    const calcBaseTotal = document.getElementById('calc-base-total');
-    const calcDiscountPct = document.getElementById('calc-discount-pct');
-    const calcDiscountAmt = document.getElementById('calc-discount-amt');
-    const calcFinalTotal = document.getElementById('calc-final-total');
-    const whatsappBtn = document.getElementById('modal-whatsapp-btn');
+// ---------------------------------------------------------------------
+// 4. Build dynamic category cards
+// ---------------------------------------------------------------------
+function buildCategoryMenu() {
+    const categories = [...new Set(allProducts.map(p => p.category).filter(Boolean))];
+    categoryGrid.innerHTML = categories.map(cat => \`
+        <div class="category-card" data-category="\${cat}">
+            <h3>\${cat}</h3>
+            <p>\${cat === 'Heritage' ? 'Rich, traditional luxury' : 
+                 cat === 'Minimal' ? 'Understated elegance' :
+                 cat === 'Floral' ? "Nature's romantic touch" :
+                 cat === 'Modern' ? 'Contemporary & bold' :
+                 'Explore our exclusive collection'}</p>
+        </div>
+    \`).join('');
 
-    // State
-    let allProducts = [];          // Full dataset from JSON
-    let filteredProducts = [];    // Products matching current filter (sorted featured first)
-    let visibleCount = 0;
-    let currentFilter = 'All';
-
-    // ---------------------------------------------------------------------
-    // 3. Fetch data and initialize everything
-    // ---------------------------------------------------------------------
-    fetch('./data/cards.json')
-        .then(res => res.json())
-        .then(data => {
-            allProducts = data.map(p => ({
-                ...p,
-                // Ensure images array exists and points to the right folder
-                images: (p.images && p.images.length > 0) ? p.images : ['assets/cards/placeholder.jpg'],
-                featured: p.featured || false,
-                description: p.description || DEFAULT_DESCRIPTION
-            }));
-
-            buildCategoryMenu();
-            buildFilterButtons();
-            applyFilter('All');
-            updateShowMoreButton();
-        })
-        .catch(err => {
-            console.error('Failed to load cards.json', err);
-            productContainer.innerHTML = '<p class="no-products" style="grid-column:1/-1; text-align:center; padding:40px; color:var(--text-light);">Unable to load designs. Please try again later.</p>';
+    categoryGrid.addEventListener('click', (e) => {
+        const card = e.target.closest('.category-card');
+        if (!card) return;
+        const cat = card.dataset.category;
+        document.querySelectorAll('.filter-btn').forEach(btn => {
+            btn.classList.remove('active');
+            if (btn.dataset.filter === cat) btn.classList.add('active');
         });
+        applyFilter(cat);
+        document.getElementById('shop').scrollIntoView({ behavior: 'smooth' });
+    });
+}
 
-    // ---------------------------------------------------------------------
-    // 4. Build dynamic category cards (in the "Collections" section)
-    // ---------------------------------------------------------------------
-    function buildCategoryMenu() {
-        const categories = [...new Set(allProducts.map(p => p.category).filter(Boolean))];
-        categoryGrid.innerHTML = categories.map(cat => `
-            <div class="category-card" data-category="${cat}">
-                <h3>${cat}</h3>
-                <p>${cat === 'Heritage' ? 'Rich, traditional luxury' : 
-                     cat === 'Minimal' ? 'Understated elegance' :
-                     cat === 'Floral' ? "Nature's romantic touch" :
-                     cat === 'Modern' ? 'Contemporary & bold' :
-                     'Explore our exclusive collection'}</p>
-            </div>
-        `).join('');
+// ---------------------------------------------------------------------
+// 5. Dynamic filter buttons
+// ---------------------------------------------------------------------
+function buildFilterButtons() {
+    const categories = [...new Set(allProducts.map(p => p.category).filter(Boolean))];
+    filterContainer.querySelectorAll('.filter-btn:not([data-filter="All"])').forEach(btn => btn.remove());
 
-        // Clicking a category card filters the shop and scrolls
-        categoryGrid.addEventListener('click', (e) => {
-            const card = e.target.closest('.category-card');
-            if (!card) return;
-            const cat = card.dataset.category;
-            // Activate corresponding filter button
-            document.querySelectorAll('.filter-btn').forEach(btn => {
-                btn.classList.remove('active');
-                if (btn.dataset.filter === cat) btn.classList.add('active');
-            });
-            applyFilter(cat);
-            document.getElementById('shop').scrollIntoView({ behavior: 'smooth' });
-        });
-    }
+    categories.forEach(cat => {
+        const btn = document.createElement('button');
+        btn.className = 'filter-btn';
+        btn.dataset.filter = cat;
+        btn.textContent = cat;
+        filterContainer.appendChild(btn);
+    });
 
-    // ---------------------------------------------------------------------
-    // 5. Dynamic filter buttons
-    // ---------------------------------------------------------------------
-    function buildFilterButtons() {
-        const categories = [...new Set(allProducts.map(p => p.category).filter(Boolean))];
-        // Clear existing buttons except "All"
-        filterContainer.querySelectorAll('.filter-btn:not([data-filter="All"])').forEach(btn => btn.remove());
-
-        categories.forEach(cat => {
-            const btn = document.createElement('button');
-            btn.className = 'filter-btn';
-            btn.dataset.filter = cat;
-            btn.textContent = cat;
-            filterContainer.appendChild(btn);
-        });
-
-        // Add event listeners to all filter buttons (including "All")
-        filterContainer.addEventListener('click', (e) => {
-            const btn = e.target.closest('.filter-btn');
-            if (!btn) return;
-            document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-            applyFilter(btn.dataset.filter);
-        });
-    }
-
-    // ---------------------------------------------------------------------
-    // 6. Apply filter & sorting (featured first), then render first batch
-    // ---------------------------------------------------------------------
-    function applyFilter(filterCat) {
-        currentFilter = filterCat;
-        filteredProducts = filterCat === 'All'
-            ? [...allProducts]
-            : allProducts.filter(p => p.category === filterCat);
-
-        // Sort: featured items first
-        filteredProducts.sort((a, b) => (b.featured ? 1 : 0) - (a.featured ? 1 : 0));
-
-        visibleCount = Math.min(ITEMS_PER_PAGE, filteredProducts.length);
-        productContainer.innerHTML = '';
-
-        if (filteredProducts.length === 0) {
-            productContainer.innerHTML = '<p class="no-products" style="grid-column:1/-1; text-align:center; color:var(--text-light); padding:40px;">No designs found in this collection.</p>';
-        } else {
-            const initialItems = filteredProducts.slice(0, visibleCount);
-            productContainer.innerHTML = initialItems.map(product => createCardHTML(product)).join('');
-        }
-
-        updateShowMoreButton();
-    }
-
-    // ---------------------------------------------------------------------
-    // 7. Create card HTML with optional featured badge
-    // ---------------------------------------------------------------------
-    function createCardHTML(product) {
-        const productJson = encodeURIComponent(JSON.stringify(product));
-        const featuredBadge = product.featured ? '<span class="featured-badge">Featured</span>' : '';
-        return `
-            <div class="product-card">
-                <div class="product-img-wrapper">
-                    ${featuredBadge}
-                    <img src="${product.images[0]}" alt="${product.id}" loading="lazy">
-                    <div class="quick-view-overlay">
-                        <button class="quick-view-btn" data-product="${productJson}">Quick View</button>
-                    </div>
-                </div>
-                <h4 class="product-id">${product.id}</h4>
-                <p class="product-price">Rs. ${product.price} / card</p>
-            </div>
-        `;
-    }
-
-    // ---------------------------------------------------------------------
-    // 8. Show more items (batch loading)
-    // ---------------------------------------------------------------------
-    function showMoreItems() {
-        const nextCount = Math.min(visibleCount + ITEMS_PER_PAGE, filteredProducts.length);
-        const newItems = filteredProducts.slice(visibleCount, nextCount);
-        if (newItems.length > 0) {
-            const cardsHTML = newItems.map(product => createCardHTML(product)).join('');
-            productContainer.insertAdjacentHTML('beforeend', cardsHTML);
-        }
-        visibleCount = nextCount;
-        updateShowMoreButton();
-    }
-
-    function updateShowMoreButton() {
-        showMoreBtn.style.display = (visibleCount < filteredProducts.length) ? 'inline-block' : 'none';
-    }
-
-    // ---------------------------------------------------------------------
-    // 9. Quick View event delegation
-    // ---------------------------------------------------------------------
-    productContainer.addEventListener('click', (e) => {
-        const btn = e.target.closest('.quick-view-btn');
+    filterContainer.addEventListener('click', (e) => {
+        const btn = e.target.closest('.filter-btn');
         if (!btn) return;
-        const product = JSON.parse(decodeURIComponent(btn.getAttribute('data-product')));
-        openProductModal(product);
+        document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        applyFilter(btn.dataset.filter);
     });
+}
 
-    showMoreBtn.addEventListener('click', showMoreItems);
+// ---------------------------------------------------------------------
+// 6. Apply filter & sorting (featured first), then render first batch
+// ---------------------------------------------------------------------
+function applyFilter(filterCat) {
+    currentFilter = filterCat;
+    filteredProducts = filterCat === 'All'
+        ? [...allProducts]
+        : allProducts.filter(p => p.category === filterCat);
 
-    // ---------------------------------------------------------------------
-    // 10. Modal logic
-    // ---------------------------------------------------------------------
-    let currentUnitPrice = 0;
-    let currentProductName = "";
-    let currentProductCategory = "";
+    filteredProducts.sort((a, b) => (b.featured ? 1 : 0) - (a.featured ? 1 : 0));
 
-    function openProductModal(product) {
-        currentProductName = product.id;
-        currentProductCategory = product.category;
-        modalTitle.textContent = product.name || product.id;
-        modalCategoryLabel.textContent = `Allure ${product.category} Collection`;
-        modalUnitPrice.textContent = `Rs. ${product.price} / card`;
+    visibleCount = Math.min(ITEMS_PER_PAGE, filteredProducts.length);
+    productContainer.innerHTML = '';
 
-        // Set dynamic description
-        modalDescText.textContent = product.description || DEFAULT_DESCRIPTION;
+    if (filteredProducts.length === 0) {
+        productContainer.innerHTML = '<p class="no-products" style="grid-column:1/-1; text-align:center; color:var(--text-light); padding:40px;">No designs found in this collection.</p>';
+    } else {
+        const initialItems = filteredProducts.slice(0, visibleCount);
+        productContainer.innerHTML = initialItems.map(product => createCardHTML(product)).join('');
+    }
 
-        // Main image
-        modalImg.src = product.images[0];
-        modalImg.alt = product.name || product.id;
+    updateShowMoreButton();
+}
 
-        // Thumbnails
-        thumbnailContainer.innerHTML = '';
-        if (product.images.length > 1) {
-            product.images.forEach((imgSrc, index) => {
-                const thumbDiv = document.createElement('div');
-                thumbDiv.className = `thumb ${index === 0 ? 'active' : ''}`;
-                thumbDiv.innerHTML = `<img src="${imgSrc}" alt="Thumbnail ${index + 1}">`;
+// ---------------------------------------------------------------------
+// 7. Create card HTML
+// ---------------------------------------------------------------------
+function createCardHTML(product) {
+    const productJson = encodeURIComponent(JSON.stringify(product));
+    const featuredBadge = product.featured ? '<span class="featured-badge">Featured</span>' : '';
+    
+    // --- CALCULATION LOGIC ---
+    // Calculate price * 100 to show base bundle price
+    const priceFor100 = product.price * 100;
+    // Formatting with en-IN adds Indian commas
+    const formattedPrice = '₹' + priceFor100.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    // -----------------------------
 
-                thumbDiv.addEventListener('click', () => {
-                    modalImg.style.opacity = '0.5';
-                    setTimeout(() => {
-                        modalImg.src = imgSrc;
-                        modalImg.style.opacity = '1';
-                    }, 150);
-                    document.querySelectorAll('.thumb').forEach(t => t.classList.remove('active'));
-                    thumbDiv.classList.add('active');
-                });
+    return \`
+        <div class="product-card">
+            <div class="product-img-wrapper">
+                \${featuredBadge}
+                <img src="\${product.images[0]}" alt="\${product.id}" loading="lazy">
+                <div class="quick-view-overlay">
+                    <button class="quick-view-btn" data-product="\${productJson}">Quick View</button>
+                </div>
+            </div>
+            <h4 class="product-id">\${product.id}</h4>
+            <p class="product-price">\${formattedPrice}</p>
+        </div>
+    \`;
+}
 
-                thumbnailContainer.appendChild(thumbDiv);
+// ---------------------------------------------------------------------
+// 8. Show more items (batch loading)
+// ---------------------------------------------------------------------
+function showMoreItems() {
+    const nextCount = Math.min(visibleCount + ITEMS_PER_PAGE, filteredProducts.length);
+    const newItems = filteredProducts.slice(visibleCount, nextCount);
+    if (newItems.length > 0) {
+        const cardsHTML = newItems.map(product => createCardHTML(product)).join('');
+        productContainer.insertAdjacentHTML('beforeend', cardsHTML);
+    }
+    visibleCount = nextCount;
+    updateShowMoreButton();
+}
+
+function updateShowMoreButton() {
+    showMoreBtn.style.display = (visibleCount < filteredProducts.length) ? 'inline-block' : 'none';
+}
+
+// ---------------------------------------------------------------------
+// 9. Quick View event delegation
+// ---------------------------------------------------------------------
+productContainer.addEventListener('click', (e) => {
+    const btn = e.target.closest('.quick-view-btn');
+    if (!btn) return;
+    const product = JSON.parse(decodeURIComponent(btn.getAttribute('data-product')));
+    openProductModal(product);
+});
+
+showMoreBtn.addEventListener('click', showMoreItems);
+
+// ---------------------------------------------------------------------
+// 10. Modal logic
+// ---------------------------------------------------------------------
+let currentUnitPrice = 0;
+let currentProductName = "";
+let currentProductCategory = "";
+
+function openProductModal(product) {
+    currentProductName = product.id;
+    currentProductCategory = product.category;
+    modalTitle.textContent = product.name || product.id;
+    modalCategoryLabel.textContent = \`Allure \${product.category} Collection\`;
+    
+    // Reflect ₹ formatting for 100 item bundle in the modal title
+    const priceFor100 = product.price * 100;
+    const formattedPrice = '₹' + priceFor100.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    modalUnitPrice.textContent = formattedPrice;
+
+    modalDescText.textContent = product.description || DEFAULT_DESCRIPTION;
+
+    modalImg.src = product.images[0];
+    modalImg.alt = product.name || product.id;
+
+    thumbnailContainer.innerHTML = '';
+    if (product.images.length > 1) {
+        product.images.forEach((imgSrc, index) => {
+            const thumbDiv = document.createElement('div');
+            thumbDiv.className = \`thumb \${index === 0 ? 'active' : ''}\`;
+            thumbDiv.innerHTML = \`<img src="\${imgSrc}" alt="Thumbnail \${index + 1}">\`;
+
+            thumbDiv.addEventListener('click', () => {
+                modalImg.style.opacity = '0.5';
+                setTimeout(() => {
+                    modalImg.src = imgSrc;
+                    modalImg.style.opacity = '1';
+                }, 150);
+                document.querySelectorAll('.thumb').forEach(t => t.classList.remove('active'));
+                thumbDiv.classList.add('active');
             });
-        }
 
-        currentUnitPrice = product.price;
+            thumbnailContainer.appendChild(thumbDiv);
+        });
+    }
+
+    currentUnitPrice = product.price;
+    qtyInput.value = 100;
+    calculateTotal();
+
+    modal.classList.add('active');
+    document.body.style.overflow = 'hidden';
+}
+
+// ---------------------------------------------------------------------
+// 11. Discount calculator (Updated with Rules)
+// ---------------------------------------------------------------------
+function calculateTotal() {
+    let qty = parseInt(qtyInput.value);
+    if (isNaN(qty) || qty < 100) qty = 100;
+
+    const baseTotal = qty * currentUnitPrice;
+
+    let discountPercent = 0;
+    let setupCharge = 0;
+
+    // New Pricing Rules
+    if (qty >= 1000) {
+        discountPercent = 10;
+    } else if (qty >= 500) {
+        discountPercent = 5;
+    } else if (qty >= 200) {
+        discountPercent = 0;
+    } else {
+        // qty 100-199
+        setupCharge = 600;
+    }
+
+    const discountAmount = Math.round(baseTotal * (discountPercent / 100));
+    const finalTotal = baseTotal + setupCharge - discountAmount;
+
+    calcBaseTotal.textContent = \`Rs. \${baseTotal.toLocaleString('en-IN')}\`;
+    
+    const discountRow = document.getElementById('discount-row');
+    if (setupCharge > 0) {
+        discountRow.classList.remove('highlight-discount');
+        discountRow.innerHTML = \`<span>Setup Charge (&lt; 200 cards):</span><span>+ Rs. \${setupCharge.toLocaleString('en-IN')}</span>\`;
+    } else if (discountPercent > 0) {
+        discountRow.classList.add('highlight-discount');
+        discountRow.innerHTML = \`<span>Volume Discount (\${discountPercent}%):</span><span>- Rs. \${discountAmount.toLocaleString('en-IN')}</span>\`;
+    } else {
+        discountRow.classList.remove('highlight-discount');
+        discountRow.innerHTML = \`<span>Volume Discount (0%):</span><span>- Rs. 0</span>\`;
+    }
+
+    calcFinalTotal.textContent = \`Rs. \${finalTotal.toLocaleString('en-IN')}\`;
+
+    let feeNote = "";
+    if (setupCharge > 0) feeNote = " (Includes Rs. 600 setup charge)";
+    else if (discountPercent > 0) feeNote = \` (Includes \${discountPercent}% volume discount)\`;
+
+    const message = \`Hello Impressions! I would like to inquire about an Allure card design.\\n\\n\` +
+                    \`*Design:* \${currentProductName} (\${currentProductCategory} Collection)\\n\` +
+                    \`*Quantity:* \${qty}\\n\` +
+                    \`*Unit Price:* Rs. \${currentUnitPrice}\\n\` +
+                    \`*Estimated Total:* Rs. \${finalTotal.toLocaleString('en-IN')}\${feeNote}\\n\\n\` +
+                    \`Please let me know how to proceed.\`;
+    whatsappBtn.href = \`https://wa.me/\${whatsappNumber}?text=\${encodeURIComponent(message)}\`;
+}
+
+qtyInput.addEventListener('input', calculateTotal);
+qtyInput.addEventListener('change', () => {
+    if (parseInt(qtyInput.value) < 100) {
         qtyInput.value = 100;
         calculateTotal();
-
-        modal.classList.add('active');
-        document.body.style.overflow = 'hidden';
     }
+});
 
-    // ---------------------------------------------------------------------
-    // 11. Discount calculator
-    // ---------------------------------------------------------------------
-    function calculateTotal() {
-        let qty = parseInt(qtyInput.value);
-        if (isNaN(qty) || qty < 100) qty = 100;
+// ---------------------------------------------------------------------
+// 12. Close modal
+// ---------------------------------------------------------------------
+closeModalBtn.addEventListener('click', () => {
+    modal.classList.remove('active');
+    document.body.style.overflow = 'auto';
+});
 
-        const baseTotal = qty * currentUnitPrice;
-
-        let discountPercent = 0;
-        if (qty >= 600) discountPercent = 25;
-        else if (qty >= 500) discountPercent = 20;
-        else if (qty >= 400) discountPercent = 15;
-        else if (qty >= 300) discountPercent = 10;
-        else if (qty >= 200) discountPercent = 5;
-
-        const discountAmount = Math.round(baseTotal * (discountPercent / 100));
-        const finalTotal = baseTotal - discountAmount;
-
-        calcBaseTotal.textContent = `Rs. ${baseTotal.toLocaleString()}`;
-        calcDiscountPct.textContent = discountPercent;
-        calcDiscountAmt.textContent = discountAmount.toLocaleString();
-        calcFinalTotal.textContent = `Rs. ${finalTotal.toLocaleString()}`;
-
-        const message = `Hello Impressions! I would like to inquire about an Allure card design.\n\n` +
-                        `*Design:* ${currentProductName} (${currentProductCategory} Collection)\n` +
-                        `*Quantity:* ${qty}\n` +
-                        `*Unit Price:* Rs. ${currentUnitPrice}\n` +
-                        `*Estimated Total:* Rs. ${finalTotal.toLocaleString()} (Includes ${discountPercent}% volume discount)\n\n` +
-                        `Please let me know how to proceed.`;
-        whatsappBtn.href = `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(message)}`;
-    }
-
-    qtyInput.addEventListener('input', calculateTotal);
-    qtyInput.addEventListener('change', () => {
-        if (parseInt(qtyInput.value) < 100) {
-            qtyInput.value = 100;
-            calculateTotal();
-        }
-    });
-
-    // ---------------------------------------------------------------------
-    // 12. Close modal
-    // ---------------------------------------------------------------------
-    closeModalBtn.addEventListener('click', () => {
+window.addEventListener('click', (e) => {
+    if (e.target === modal) {
         modal.classList.remove('active');
         document.body.style.overflow = 'auto';
-    });
+    }
+});
 
-    window.addEventListener('click', (e) => {
-        if (e.target === modal) {
-            modal.classList.remove('active');
-            document.body.style.overflow = 'auto';
-        }
-    });
+// ---------------------------------------------------------------------
+// 13. Footer year
+// ---------------------------------------------------------------------
+document.getElementById('currentYear').textContent = new Date().getFullYear();
 
-    // ---------------------------------------------------------------------
-    // 13. Footer year
-    // ---------------------------------------------------------------------
-    document.getElementById('currentYear').textContent = new Date().getFullYear();
 
 });
+```
